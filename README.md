@@ -28,7 +28,7 @@ Operates completely offline with zero external runtime dependencies using Python
 - **Formula RPN Token Disassembly & Expression Decoding [Implemented & Verified]:** Modular formula bytecode disassembler (`src/formats/wks_formula.py`) parses Lotus 1-2-3 RPN bytecode into structured token arrays (`formula_tokens`) and human-readable infix expressions (`formula_text`), with status tracked in `formula_decode_status`. Supports constants (float64 and int16), cell references (`0x01`) and range references (`0x02`) with 14-bit signed relative and absolute coordinate resolution, arithmetic operators (`+`, `-`, `*`, `/`, `^`), comparison operators (`=`, `<>`, `<=`, `>=`, `<`, `>`), logical operators (`#AND#`, `#OR#`, `#NOT#`), parentheses (`0x04`), single-byte built-in functions (`@NA`, `@DATE`, `@TODAY`, `@PMT`, `@PV`, `@FV`, `@IF`, `@ROUND`, `@VLOOKUP`, `@DSUM`), and variable-argument range functions (`@SUM`, `@AVG`, `@COUNT`, `@MIN`, `@MAX`, `@STD`, `@NPV`). Unknown or malformed tokens fall back safely with unparsed remainder bytes preserved in `formula_unparsed_hex`. Verified across all 1,361 formula records in repository fixtures (`ANNUITY.WKS`, `BALANCE.WKS`, `EMPTAXES.WKS`, `CASH.WKS`, `COUPONS.WKS`, `FLCHART.WKS`, `GOLF.WKS`, `ICR_CALC.WKS`, `INVOICE.WKS`, `MISTOX.WKS`, `RENTAL.WKS`, `STATMENT.WKS`, `UTILITIE.WKS`, etc.), achieving 1,360/1,361 (99.9%) complete disassembly with 100% byte-exact preservation of `raw_payload`.
 - **Unknown Opcode Handling [Implemented & Verified]:** Unrecognized opcodes are retained with `decode_status: "raw_preserved"` and 100% of payload bytes preserved.
 - **Damage Block & Gap Recovery [Phase 7 - Verified]:** Unrecoverable or structurally ambiguous byte regions are preserved as explicit damage/gap blocks with exact byte ranges and raw bytes. Every input byte is accounted for with zero gaps and zero overlaps across all valid and damaged streams.
-- **Round-Trip Reconstruction [Planned - Phase 8]:** Byte-for-byte binary synthesis from JSON is planned.
+- **Round-Trip Binary Re-serialization [Phase 8 - Verified]:** Byte-for-byte binary reassembly engine (`src/formats/wks_writer.py`) reproduces the original file byte-for-byte from recovered records and preserved damage/gap/trailing regions (`output == input`, SHA-256 identical). The writer reproduces the original file byte-for-byte from recovered records and preserved damage/gap/trailing regions. It does not repair or alter corrupted data. Enforces strict contiguity validation raising `SerializationError` on gaps or overlaps. Includes a Layer 2 semantic verification layer checking field invertibility without modifying raw byte preservation. Verified across all 17 corpus files, synthetic fixtures, JSON round-trips, and 2,000 seeded random fuzz mutations.
 
 ---
 
@@ -57,7 +57,7 @@ Operates completely offline with zero external runtime dependencies using Python
 ### Local Execution (Windows / PowerShell)
 
 ```powershell
-# Run the complete test suite (100 tests)
+# Run the complete test suite (113 tests)
 python -m unittest discover tests
 
 # Run salvage
