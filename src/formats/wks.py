@@ -385,7 +385,23 @@ class WksParser(BaseParser):
             )
         else:
             # File does not begin with BOF opcode 0x0000
+            # If the header is invalid (non-BOF), record it as GAP/DAMAGE at offset 0
+            # so that byte-accounting accounts for the entire file
             reader.seek(bof_start)
+            # Find if there is any standard recovery or if the whole file is damage
+            # We treat the remaining bytes as a GAP / invalid header
+            rem_len = reader.remaining
+            damaged_bytes = reader.read_bytes(rem_len)
+            damages.append(
+                DamageBlock(
+                    offset=bof_start,
+                    length=rem_len,
+                    damage_type=DamageType.INVALID_HEADER,
+                    description=f"File does not begin with valid BOF opcode 0x0000 (found 0x{first_opcode:04X})",
+                    raw_hex=damaged_bytes.hex(),
+                    reason="missing_or_corrupt_bof",
+                )
+            )
 
         # Parse sequential records
         rec_idx = 0
@@ -411,13 +427,16 @@ class WksParser(BaseParser):
             payload_len = reader.read_u16_le()
 
             if payload_len > self.MAX_RECORD_LENGTH:
+                rem_len = reader.remaining
+                reader.skip(rem_len)
+                total_damaged_slice = reader.read_exact(4 + rem_len, rec_start)
                 damages.append(
                     DamageBlock(
                         offset=rec_start,
-                        length=4,
+                        length=4 + rem_len,
                         damage_type=DamageType.CORRUPT_RECORD,
-                        description=f"Record {rec_idx} payload length {payload_len} exceeds limit",
-                        raw_hex=reader.read_exact(4, rec_start).hex(),
+                        description=f"Record {rec_idx} payload length {payload_len} exceeds limit ({rem_len} remaining bytes preserved)",
+                        raw_hex=total_damaged_slice.hex(),
                         reason="payload_length_exceeds_max",
                     )
                 )
