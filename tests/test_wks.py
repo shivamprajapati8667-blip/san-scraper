@@ -188,5 +188,481 @@ class TestWksParser(unittest.TestCase):
         self.assertEqual(rec_num.fields["row"], 10)
         self.assertAlmostEqual(rec_num.fields["value"], 1.0)
 
+    # --- Phase 1: Lossless raw payload retention tests ---
+
+    def test_lossless_raw_payload_preservation_across_all_record_types(self):
+        """[Phase 1] Assert 100% of payload bytes survive in raw_payload and raw_hex."""
+        bof_payload = struct.pack("<H", 0x0404)
+        int_payload = struct.pack("<BHHh", 127, 2, 4, 1234)
+        lbl_payload = struct.pack("<BHHB", 0, 0, 0, ord("'")) + b"SampleText\x00"
+        records = [
+            (0x0000, bof_payload),
+            (0x000D, int_payload),
+            (0x000F, lbl_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("lossless_sample.wks", BoundedBinaryReader(data))
+        self.assertTrue(res.is_valid_header)
+
+        rec_int = res.recovered_records[0]
+        self.assertEqual(rec_int.fields["raw_payload"], int_payload.hex())
+        self.assertEqual(rec_int.fields["raw_hex"], int_payload.hex())
+        self.assertEqual(len(rec_int.fields["raw_payload"]), len(int_payload) * 2)
+
+        rec_lbl = res.recovered_records[1]
+        self.assertEqual(rec_lbl.fields["raw_payload"], lbl_payload.hex())
+        self.assertEqual(rec_lbl.fields["raw_hex"], lbl_payload.hex())
+        self.assertEqual(len(rec_lbl.fields["raw_payload"]), len(lbl_payload) * 2)
+
+    def test_large_payloads_zero_truncation(self):
+        """[Phase 1] Test unknown and large payloads of 33, 64, 242, 437, and 1024 bytes."""
+        bof_payload = struct.pack("<H", 0x0404)
+        test_sizes = [33, 64, 242, 437, 1024]
+        records = [(0x0000, bof_payload)]
+        expected_payloads = {}
+
+        for i, size in enumerate(test_sizes):
+            opcode = 0x0030 + i
+            # Generate deterministic bytes for each size
+            payload = bytes((x * 7 + i) % 256 for x in range(size))
+            expected_payloads[opcode] = payload
+            records.append((opcode, payload))
+
+        records.append((0x0001, b""))  # EOF
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("large_payloads.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        # We expect 5 unknown large records + 1 EOF record = 6 recovered records
+        self.assertEqual(len(res.recovered_records), len(test_sizes) + 1)
+
+        for i, size in enumerate(test_sizes):
+            opcode = 0x0030 + i
+            rec = res.recovered_records[i]
+            expected_payload = expected_payloads[opcode]
+
+            self.assertEqual(rec.fields["opcode"], opcode)
+            self.assertEqual(rec.fields["payload_len"], size)
+            # Crucial assertion: Must NOT be truncated to 32 bytes or any sub-slice!
+            self.assertEqual(rec.fields["raw_payload"], expected_payload.hex())
+            self.assertEqual(rec.fields["raw_hex"], expected_payload.hex())
+            self.assertEqual(len(rec.fields["raw_payload"]), size * 2)
+            self.assertEqual(rec.fields["decode_status"], "raw_preserved")
+
+    # --- Phase 2: Formula bytecode preservation tests ---
+
+    def test_formula_bytecode_preservation_exact_match(self):
+        """[Phase 2] Assert formula bytecode is preserved exactly in formula_raw_hex and matches raw_payload."""
+        bof_payload = struct.pack("<H", 0x0404)
+        # Synthetic formula: fmt=0, col=2, row=5, cached_val=42.0
+        # Bytecode: 6 bytes (e.g. constant + return: \x01\x05\x00\x5b\x00\x03)
+        bytecode = bytes.fromhex("0105005b0003")
+        formula_hdr = struct.pack("<BHHdH", 0, 2, 5, 42.0, len(bytecode))
+        formula_payload = formula_hdr + bytecode
+
+        records = [
+            (0x0000, bof_payload),
+            (0x0010, formula_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("formula_test.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        self.assertEqual(len(res.recovered_records), 2)  # FORMULA, EOF
+        rec = res.recovered_records[0]
+
+        self.assertEqual(rec.fields["record_type"], "FORMULA")
+        self.assertEqual(rec.fields["col"], 2)
+        self.assertEqual(rec.fields["row"], 5)
+        self.assertAlmostEqual(rec.fields["cached_value"], 42.0)
+        self.assertEqual(rec.fields["formula_len"], 6)
+        self.assertEqual(rec.fields["formula_raw_hex"], bytecode.hex())
+        self.assertEqual(rec.fields["decode_status"], "bytecode_preserved")
+
+        # Crucial invariant: raw_payload holds 100% of bytes (15 + 6 = 21 bytes)
+        self.assertEqual(rec.fields["raw_payload"], formula_payload.hex())
+        self.assertEqual(rec.fields["raw_hex"], formula_payload.hex())
+        # formula_raw_hex must match the exact slice starting at offset 15 (hex char 30)
+        self.assertEqual(rec.fields["raw_payload"][30:30 + len(bytecode)*2], rec.fields["formula_raw_hex"])
+
+    def test_formula_malformed_truncated_bytecode_handling(self):
+        """[Phase 2] Truncated formula payload preserves complete raw_payload without crashing."""
+        bof_payload = struct.pack("<H", 0x0404)
+        # Declares 10 bytes of formula bytecode, but only 3 follow
+        short_bytecode = b"\x01\x02\x03"
+        formula_hdr = struct.pack("<BHHdH", 0, 1, 1, 9.99, 10)  # Declares len 10
+        formula_payload = formula_hdr + short_bytecode           # Total 15 + 3 = 18 bytes
+
+        records = [
+            (0x0000, bof_payload),
+            (0x0010, formula_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("formula_trunc.wks", BoundedBinaryReader(data))
+
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["record_type"], "FORMULA")
+        self.assertEqual(rec.fields["decode_status"], "truncated_bytecode")
+        self.assertEqual(rec.fields["formula_raw_hex"], short_bytecode.hex())
+        # Entire raw payload must remain 100% intact
+        self.assertEqual(rec.fields["raw_payload"], formula_payload.hex())
+        self.assertTrue(len(rec.errors) > 0)
+
+    def test_formula_short_payload_under_15_bytes(self):
+        """[Phase 2] Formula with payload under 15 bytes preserves raw_payload and notes short payload."""
+        bof_payload = struct.pack("<H", 0x0404)
+        short_payload = b"\x00\x01\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00"  # 13 bytes
+        records = [
+            (0x0000, bof_payload),
+            (0x0010, short_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("formula_short.wks", BoundedBinaryReader(data))
+
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["record_type"], "FORMULA")
+        self.assertEqual(rec.fields["decode_status"], "short_formula_payload")
+        self.assertEqual(rec.fields["raw_payload"], short_payload.hex())
+        self.assertEqual(rec.fields["formula_raw_hex"], "")
+
+    # --- Phase 3: Modular Opcode Decoder Registry tests ---
+
+    def test_decoder_registry_dispatch_and_custom_extension(self):
+        """[Phase 3] Test that registry dispatches properly and can register custom decoders cleanly."""
+        parser = WksParser()
+        bof_payload = struct.pack("<H", 0x0404)
+
+        # Register a mock custom decoder for opcode 0x0077
+        def custom_decoder_77(payload_bytes: bytes, errors: list[str]) -> dict:
+            return {"record_type": "CUSTOM_RECORD", "custom_val": payload_bytes.hex()}
+
+        parser.register_decoder(0x0077, custom_decoder_77)
+
+        records = [
+            (0x0000, bof_payload),
+            (0x0077, b"\x01\x02\x03\x04"),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = parser.parse("custom_rec.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["record_type"], "CUSTOM_RECORD")
+        self.assertEqual(rec.fields["custom_val"], "01020304")
+        # Layer A raw bytes are still 100% preserved
+        self.assertEqual(rec.fields["raw_payload"], "01020304")
+
+    def test_decoder_registry_exception_isolation_never_crashes(self):
+        """[Phase 3] If a decoder raises an unhandled exception, raw bytes survive and record does not crash."""
+        parser = WksParser()
+        bof_payload = struct.pack("<H", 0x0404)
+
+        def buggy_decoder(payload_bytes: bytes, errors: list[str]) -> dict:
+            raise ValueError("Intentional simulated decoder failure")
+
+        parser.register_decoder(0x0088, buggy_decoder)
+
+        records = [
+            (0x0000, bof_payload),
+            (0x0088, b"\xAA\xBB\xCC\xDD"),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = parser.parse("buggy_rec.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        rec = res.recovered_records[0]
+        # Layer A raw retention holds true
+        self.assertEqual(rec.fields["raw_payload"], "aabbccdd")
+        self.assertEqual(rec.fields["raw_hex"], "aabbccdd")
+        self.assertEqual(rec.fields["decode_status"], "decoder_exception")
+        self.assertTrue(any("Intentional simulated decoder failure" in err for err in rec.errors))
+
+    # --- Phase 4: Opcode 0x0008 (Column Width) tests ---
+
+    def test_column_width_valid_semantic_decoding(self):
+        """[Phase 4] Assert valid 0x0008 payload decodes column index and width correctly with little-endian interpretation."""
+        bof_payload = struct.pack("<H", 0x0404)
+        # Test column 258 (0x0102 -> bytes 02 01) and width 15 (0x0F)
+        col_payload = struct.pack("<HB", 258, 15)
+        records = [
+            (0x0000, bof_payload),
+            (0x0008, col_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("colw_valid.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["opcode"], 8)
+        self.assertEqual(rec.fields["payload_len"], 3)
+        self.assertEqual(rec.fields["record_type"], "COLUMN_WIDTH")
+        self.assertEqual(rec.fields["col"], 258)
+        self.assertEqual(rec.fields["width"], 15)
+
+        # Layer A raw retention must be exact
+        self.assertEqual(rec.fields["raw_payload"], col_payload.hex())
+        self.assertEqual(rec.fields["raw_hex"], col_payload.hex())
+
+    def test_column_width_malformed_short_payload_falls_back_safely(self):
+        """[Phase 4] Assert short 0x0008 payload (e.g. 2 bytes) fails semantic decode gracefully without dropping raw bytes."""
+        bof_payload = struct.pack("<H", 0x0404)
+        short_col_payload = b"\x01\x00"  # 2 bytes instead of 3
+        records = [
+            (0x0000, bof_payload),
+            (0x0008, short_col_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("colw_short.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["opcode"], 8)
+        self.assertEqual(rec.fields["payload_len"], 2)
+        # Falls back to unknown safely
+        self.assertEqual(rec.fields["record_type"], "UNKNOWN_OPCODE_0x0008")
+        self.assertEqual(rec.fields["decode_status"], "raw_preserved")
+        # 100% of raw bytes preserved
+        self.assertEqual(rec.fields["raw_payload"], "0100")
+        self.assertEqual(rec.fields["raw_hex"], "0100")
+        self.assertTrue(any("Invalid COLUMN_WIDTH payload length" in err for err in rec.errors))
+
+    def test_column_width_malformed_oversized_payload_falls_back_safely(self):
+        """[Phase 4] Assert oversized 0x0008 payload (e.g. 5 bytes) fails semantic decode gracefully without dropping raw bytes."""
+        bof_payload = struct.pack("<H", 0x0404)
+        oversized_payload = b"\x05\x00\x0C\xAA\xBB"  # 5 bytes instead of 3
+        records = [
+            (0x0000, bof_payload),
+            (0x0008, oversized_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("colw_oversized.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["opcode"], 8)
+        self.assertEqual(rec.fields["payload_len"], 5)
+        self.assertEqual(rec.fields["record_type"], "UNKNOWN_OPCODE_0x0008")
+        self.assertEqual(rec.fields["decode_status"], "raw_preserved")
+        # 100% of raw bytes preserved
+        self.assertEqual(rec.fields["raw_payload"], "05000caabb")
+        self.assertEqual(rec.fields["raw_hex"], "05000caabb")
+
+    # --- Phase 5: Opcode 0x000B (Named Range) tests ---
+
+    def test_named_range_valid_semantic_decoding(self):
+        """[Phase 5] Assert valid 0x000B payload decodes name and all 4 coordinates with little-endian interpretation."""
+        bof_payload = struct.pack("<H", 0x0404)
+        # 16 bytes name with null padding: "MY_RANGE\0\0\0\0\0\0\0\0"
+        name_16 = b"MY_RANGE\x00" + b"\x00" * 7
+        # Coordinates: start_col=2, start_row=10, end_col=5, end_row=25
+        coords = struct.pack("<HHHH", 2, 10, 5, 25)
+        nrange_payload = name_16 + coords
+
+        records = [
+            (0x0000, bof_payload),
+            (0x000B, nrange_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("nrange_valid.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["opcode"], 11)
+        self.assertEqual(rec.fields["payload_len"], 24)
+        self.assertEqual(rec.fields["record_type"], "NAMED_RANGE")
+        self.assertEqual(rec.fields["range_name"], "MY_RANGE")
+        self.assertEqual(rec.fields["start_col"], 2)
+        self.assertEqual(rec.fields["start_row"], 10)
+        self.assertEqual(rec.fields["end_col"], 5)
+        self.assertEqual(rec.fields["end_row"], 25)
+
+        # Layer A raw retention must be exact
+        self.assertEqual(rec.fields["raw_payload"], nrange_payload.hex())
+        self.assertEqual(rec.fields["raw_hex"], nrange_payload.hex())
+
+    def test_named_range_space_padded_name_handling(self):
+        """[Phase 5] Space-padded or null-padded 16-byte names are cleanly stripped without dropping characters."""
+        bof_payload = struct.pack("<H", 0x0404)
+        name_16 = b"TOTALS          "  # 16 bytes space-padded
+        coords = struct.pack("<HHHH", 0, 0, 10, 10)
+        nrange_payload = name_16 + coords
+
+        records = [
+            (0x0000, bof_payload),
+            (0x000B, nrange_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("nrange_space.wks", BoundedBinaryReader(data))
+
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["range_name"], "TOTALS")
+        self.assertEqual(rec.fields["raw_payload"], nrange_payload.hex())
+
+    def test_named_range_malformed_short_payload_falls_back_safely(self):
+        """[Phase 5] Assert short 0x000B payload (e.g. 20 bytes) fails semantic decode gracefully without dropping raw bytes."""
+        bof_payload = struct.pack("<H", 0x0404)
+        # 16 bytes name + 4 bytes coords = 20 bytes (instead of 24)
+        short_payload = b"SHORT_RANGE\x00\x00\x00\x00\x00" + struct.pack("<HH", 1, 2)
+        records = [
+            (0x0000, bof_payload),
+            (0x000B, short_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("nrange_short.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["opcode"], 11)
+        self.assertEqual(rec.fields["payload_len"], 20)
+        # Falls back to unknown safely
+        self.assertEqual(rec.fields["record_type"], "UNKNOWN_OPCODE_0x000B")
+        self.assertEqual(rec.fields["decode_status"], "raw_preserved")
+        # 100% of raw bytes preserved
+        self.assertEqual(rec.fields["raw_payload"], short_payload.hex())
+        self.assertEqual(rec.fields["raw_hex"], short_payload.hex())
+        self.assertTrue(any("Invalid NAMED_RANGE payload length" in err for err in rec.errors))
+
+    def test_named_range_malformed_oversized_payload_falls_back_safely(self):
+        """[Phase 5] Assert oversized 0x000B payload (e.g. 30 bytes) fails semantic decode gracefully without dropping raw bytes."""
+        bof_payload = struct.pack("<H", 0x0404)
+        oversized_payload = b"A" * 30  # 30 bytes instead of 24
+        records = [
+            (0x0000, bof_payload),
+            (0x000B, oversized_payload),
+            (0x0001, b""),
+        ]
+        data = build_synthetic_wks(records)
+        res = self.parser.parse("nrange_oversized.wks", BoundedBinaryReader(data))
+
+        self.assertTrue(res.is_valid_header)
+        rec = res.recovered_records[0]
+        self.assertEqual(rec.fields["opcode"], 11)
+        self.assertEqual(rec.fields["payload_len"], 30)
+        self.assertEqual(rec.fields["record_type"], "UNKNOWN_OPCODE_0x000B")
+        self.assertEqual(rec.fields["decode_status"], "raw_preserved")
+        # 100% of raw bytes preserved
+        self.assertEqual(rec.fields["raw_payload"], oversized_payload.hex())
+        self.assertEqual(rec.fields["raw_hex"], oversized_payload.hex())
+
+    # --- Phase 6: Formula RPN Disassembly and Expression Reconstruction tests ---
+
+    def test_formula_disassembly_simple_arithmetic(self):
+        """[Phase 6] Disassemble formula bytecode with constants and arithmetic operators."""
+        # Formula: 1 + 2 * 3 -> RPN: 1 2 3 * +
+        # 05 01 00 (int 1) 05 02 00 (int 2) 05 03 00 (int 3) 0B (*) 09 (+) 03 (return)
+        bytecode = bytes.fromhex("0501000502000503000b0903")
+        formula_hdr = struct.pack("<BHHdH", 0, 0, 0, 7.0, len(bytecode))
+        records = [
+            (0x0000, struct.pack("<H", 0x0404)),
+            (0x0010, formula_hdr + bytecode),
+            (0x0001, b""),
+        ]
+        res = self.parser.parse("f_arith.wks", BoundedBinaryReader(build_synthetic_wks(records)))
+        rec = res.recovered_records[0]
+
+        self.assertEqual(rec.fields["formula_raw_hex"], bytecode.hex())
+        self.assertEqual(rec.fields["formula_decode_status"], "disassembled")
+        self.assertEqual(rec.fields["formula_text"], "1+2*3")
+        self.assertEqual(len(rec.fields["formula_tokens"]), 6)
+        self.assertEqual(rec.fields["formula_tokens"][0]["kind"], "INTEGER")
+        self.assertEqual(rec.fields["formula_tokens"][0]["value"], 1)
+
+    def test_formula_disassembly_cell_ref_relative_coordinates(self):
+        """[Phase 6] Disassemble cell references with relative row and column addressing."""
+        # Cell at col 4, row 10
+        # Refer to cell 1 row above (rel -1 -> 0xbfff) and 2 cols left (rel -2 -> 0x80fe):
+        # 01 fe80 ffbf 03
+        bytecode = bytes.fromhex("01fe80ffbf03")
+        formula_hdr = struct.pack("<BHHdH", 0, 4, 10, 123.0, len(bytecode))
+        records = [
+            (0x0000, struct.pack("<H", 0x0404)),
+            (0x0010, formula_hdr + bytecode),
+            (0x0001, b""),
+        ]
+        res = self.parser.parse("f_cell.wks", BoundedBinaryReader(build_synthetic_wks(records)))
+        rec = res.recovered_records[0]
+
+        # 4 + (-2) = 2 (col C), 10 + (-1) = 9 (row 10 in 1-indexed) -> C10
+        self.assertEqual(rec.fields["formula_decode_status"], "disassembled")
+        self.assertEqual(rec.fields["formula_text"], "C10")
+        tok = rec.fields["formula_tokens"][0]
+        self.assertEqual(tok["kind"], "CELL_REF")
+        self.assertEqual(tok["col"], 2)
+        self.assertEqual(tok["row"], 9)
+        self.assertTrue(tok["is_rel_col"])
+        self.assertTrue(tok["is_rel_row"])
+
+    def test_formula_disassembly_range_sum_function(self):
+        """[Phase 6] Disassemble range reference and @SUM function."""
+        # Formula at A1 (col 0, row 0): @SUM(A1..A10)
+        # Range absolute: col1=0, row1=0, col2=0, row2=9
+        # 02 0000 0000 0000 0900 (range) 50 01 (SUM with 1 arg) 03 (return)
+        bytecode = bytes.fromhex("020000000000000900500103")
+        formula_hdr = struct.pack("<BHHdH", 0, 0, 0, 100.0, len(bytecode))
+        records = [
+            (0x0000, struct.pack("<H", 0x0404)),
+            (0x0010, formula_hdr + bytecode),
+            (0x0001, b""),
+        ]
+        res = self.parser.parse("f_sum.wks", BoundedBinaryReader(build_synthetic_wks(records)))
+        rec = res.recovered_records[0]
+
+        self.assertEqual(rec.fields["formula_decode_status"], "disassembled")
+        self.assertEqual(rec.fields["formula_text"], "@SUM($A$1..$A$10)")
+        self.assertEqual(rec.fields["raw_payload"], (formula_hdr + bytecode).hex())
+
+    def test_formula_disassembly_unrecognized_token_fallback(self):
+        """[Phase 6] Disassembly handles unknown token gracefully without losing raw bytes."""
+        # Bytecode has unknown token 0x7E followed by return: 7E 03
+        bytecode = bytes.fromhex("7e03")
+        formula_hdr = struct.pack("<BHHdH", 0, 0, 0, 0.0, len(bytecode))
+        records = [
+            (0x0000, struct.pack("<H", 0x0404)),
+            (0x0010, formula_hdr + bytecode),
+            (0x0001, b""),
+        ]
+        res = self.parser.parse("f_unknown.wks", BoundedBinaryReader(build_synthetic_wks(records)))
+        rec = res.recovered_records[0]
+
+        self.assertEqual(rec.fields["formula_decode_status"], "unrecognized_bytecode")
+        self.assertIsNone(rec.fields["formula_text"])
+        self.assertEqual(rec.fields["formula_raw_hex"], "7e03")
+        self.assertEqual(rec.fields["formula_unparsed_hex"], "7e03")
+        # Invariant: raw bytes 100% intact
+        self.assertEqual(rec.fields["raw_payload"], (formula_hdr + bytecode).hex())
+
+    def test_formula_disassembly_partially_recognized_stream(self):
+        """[Phase 6] Formula with valid tokens followed by unsupported bytes tokenizes prefix and preserves tail."""
+        # int 5 followed by unknown byte 0xEE
+        bytecode = bytes.fromhex("050500ee")
+        formula_hdr = struct.pack("<BHHdH", 0, 0, 0, 5.0, len(bytecode))
+        records = [
+            (0x0000, struct.pack("<H", 0x0404)),
+            (0x0010, formula_hdr + bytecode),
+            (0x0001, b""),
+        ]
+        res = self.parser.parse("f_partial.wks", BoundedBinaryReader(build_synthetic_wks(records)))
+        rec = res.recovered_records[0]
+
+        self.assertEqual(rec.fields["formula_decode_status"], "partially_disassembled")
+        self.assertEqual(len(rec.fields["formula_tokens"]), 1)
+        self.assertEqual(rec.fields["formula_unparsed_hex"], "ee")
+        self.assertEqual(rec.fields["formula_raw_hex"], "050500ee")
+        self.assertEqual(rec.fields["raw_payload"], (formula_hdr + bytecode).hex())
+
+
 if __name__ == "__main__":
     unittest.main()
+

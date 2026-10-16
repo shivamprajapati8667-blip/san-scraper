@@ -19,6 +19,8 @@ class DamageType(str, Enum):
     MALFORMED_OFFSET = "malformed_offset"
     UNKNOWN_SIGNATURE = "unknown_signature"
     DECOMPRESSION_ERROR = "decompression_error"
+    TRAILING_BYTES = "trailing_bytes"
+    GAP = "gap"
 
 @dataclass
 class DamageBlock:
@@ -26,14 +28,22 @@ class DamageBlock:
     length: int
     damage_type: DamageType
     description: str
+    raw_hex: str | None = None
+    reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        res: dict[str, Any] = {
             "offset": self.offset,
             "length": self.length,
             "type": self.damage_type.value,
             "description": self.description,
         }
+        if self.raw_hex is not None:
+            res["raw_hex"] = self.raw_hex
+            res["byte_range"] = [self.offset, self.offset + self.length]
+        if self.reason is not None:
+            res["reason"] = self.reason
+        return res
 
 @dataclass
 class RecoveredRecord:
@@ -66,6 +76,13 @@ class FileRecoveryResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        meta_dict: dict[str, Any] = {}
+        for k, v in self.metadata.items():
+            if hasattr(v, "to_dict"):
+                meta_dict[k] = v.to_dict()
+            else:
+                meta_dict[k] = v
+
         return {
             "file": self.filename,
             "format": self.format_name,
@@ -75,5 +92,5 @@ class FileRecoveryResult:
             "total_declared_records": self.total_records,
             "records": [r.to_dict() for r in self.recovered_records],
             "damages": [d.to_dict() for d in self.damages],
-            "metadata": self.metadata,
+            "metadata": meta_dict,
         }

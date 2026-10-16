@@ -16,6 +16,8 @@
   ],
   "metadata": {
     "status": "skipped",
-    "reason": "unrecognized_format"
+    "reason": "unrecognized_format",
+    "preview_hex": "7f454c465f46414b455f42494e4152595f53545245414d5f444f45535f4e4f545f4d415443485f414e595f535550504f525445445f4d414749435f4259544553",
+    "preview_text": "\u007fELF_FAKE_BINARY_STREAM_DOES_NOT_MATCH_ANY_SUPPORTED_MAGIC_BYTES"
   }
 }

@@ -1,14 +1,14 @@
 {
   "summary": {
-    "total_files_processed": 8,
-    "total_records_recovered": 22,
+    "total_files_processed": 9,
+    "total_records_recovered": 65,
     "total_damaged_blocks": 3,
     "formats": {
       "LIBRA-98": 1,
       "LABLOG": 2,
       "VAULT": 1,
       "PAK": 2,
-      "WKS": 1,
+      "WKS": 2,
       "UNKNOWN": 1
     }
   },
@@ -68,6 +68,13 @@
       "is_valid_header": false,
       "records_recovered": 0,
       "damage_count": 1
+    },
+    {
+      "file": "public_sample.wks",
+      "format": "WKS",
+      "is_valid_header": true,
+      "records_recovered": 43,
+      "damage_count": 0
     }
   ]
 }
