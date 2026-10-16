@@ -1,0 +1,351 @@
+# WKS -> JSON CONVERTER: DEEP ARCHITECTURAL ANALYSIS & IMPLEMENTATION PLAN
+==============================================================================
+Project: san-scraper (salvage)
+Role: Multi-Format Defensive Forensic Binary Recovery Engine
+Target: Near-Lossless Lotus 1-2-3 (.WKS) to JSON Recovery
+
+==============================================================================
+1. EXECUTIVE SUMMARY
+==============================================================================
+The san-scraper (salvage) project is NOT exclusively a WKS-to-JSON converter.
+It is a multi-format defensive binary file recovery engine developed for forensic
+salvage of damaged, undocumented, or legacy binary streams (PS 02: Salvage).
+It implements unified recovery pipelines across five distinct binary formats:
+  1. Lotus 1-2-3 (.WKS / .WK1) - Legacy spreadsheet record stream
+  2. Quake PAK (.PAK)          - id Software game archive with directory lumps
+  3. LIBRA-98 (.LIB)           - Legacy telemetry/database with CRC checks
+  4. LABLOG (.LAB)             - Block-framed laboratory journal with CRC32 isolation
+  5. VAULT (.VLT)              - Obfuscated archive with PackBits RLE & XOR unmasking
+  6. UNKNOWN / EMPTY           - Defensive catch-all stream parser
+
+Core Invariants of the Entire Project:
+  - 100% offline, pure Python 3.13 standard library (zero external pip dependencies).
+  - Bounded binary reading (BoundedBinaryReader) to prevent memory allocation bombs.
+  - Per-file isolation (a broken, malicious, or malformed file never halts processing).
+  - Unified forensic JSON reporting (individual <filename>.json and run report.json).
+
+Current WKS Component Rating:
+  - Binary/structural correctness: 9-10 / 10
+  - Lossless record preservation:   4-5 / 10  (payloads truncated at 32 bytes)
+  - Formula preservation:           3-4 / 10  (only cached float preserved, bytecode lost)
+  - Unknown opcode preservation:    5-6 / 10  (stored but truncated)
+  - Semantic correctness:           6-7 / 10  (missing 0x0008, 0x000B, formulas)
+  - Overall conversion quality:     7-7.5 / 10
+
+Target WKS Component Rating:
+  - Binary/structural correctness: 10 / 10
+  - Lossless record preservation:  10 / 10   (100% full raw byte retention)
+  - Formula preservation:          10 / 10   (formula string + RPN tokens + bytecode)
+  - Unknown opcode preservation:   10 / 10   (complete payload retention)
+  - Semantic correctness:          9+ / 10   (decoded 0x0008, 0x000B, formulas)
+  - Overall conversion quality:    9.5+ / 10
+
+
+==============================================================================
+2. ENTIRE PROJECT ARCHITECTURE
+==============================================================================
+
+Directory Map:
+  san-scraper/
+  ├── src/
+  │   ├── reader.py         BoundedBinaryReader: slice bounds, endian readers
+  │   ├── detector.py       FormatDetector: magic signature dispatching
+  │   ├── engine.py         SalvageEngine: coordinates reader, detector, parsers
+  │   ├── models.py         Domain Models: FileRecoveryResult, RecoveredRecord, DamageBlock
+  │   ├── reporter.py       Output containment verification & JSON generation
+  │   ├── cli.py            CLI entrypoint: loop files, invoke engine & reporter
+  │   └── formats/
+  │       ├── base.py       BaseParser abstract interface
+  │       ├── wks.py        Lotus 1-2-3 (.WKS) sequential record parser [TARGET]
+  │       ├── pak.py        Quake PAK archive parser
+  │       ├── libra98.py    LIBRA-98 provisional parser
+  │       ├── lablog.py     LABLOG block parser with CRC32 isolation
+  │       ├── vault.py      VAULT archive parser with PackBits RLE & XOR unmasking
+  │       └── unknown.py    Fallback handler for unclassified streams
+  ├── tests/                64 unit, robustness, fuzz, security, and CLI tests
+  ├── demo/                 End-to-end fixtures and demonstration runner scripts
+  ├── FORMAT-SPEC.md        Byte-level specifications for all recognized formats
+  └── FIELD-LOG.md          Architectural log, invariants, and threat models
+
+Global Execution Flow:
+  Input Directory
+         |
+         v
+     src/cli.py (run_salvage)
+         |
+         +-------------------------------------+
+         |                                     |
+         v                                     v
+  Iterates input files             Initializes Reporter(output_dir)
+         |
+         v
+  src/engine.py (SalvageEngine.process_file)
+         |
+         v
+  src/detector.py (FormatDetector.detect)
+         |-- Checks magic bytes: WKS, PAK, LIBRA-98, LABLOG, VAULT, UNKNOWN
+         v
+  src/reader.py (BoundedBinaryReader)
+         |
+         v
+  Parser Dispatch (self._parsers[format_name].parse)
+         |-- WksParser.parse(filename, reader)
+         v
+  Returns FileRecoveryResult
+         |
+         v
+  src/reporter.py
+         |-- write_file_result() -> <output_dir>/<filename>.json
+         +-- write_run_report()   -> <output_dir>/report.json
+
+
+==============================================================================
+3. WKS COMPONENT LOCATION & TRACE
+==============================================================================
+- Signature Detection: src/detector.py (offset 0 == b"\x00\x00\x02\x00")
+- Engine Registration: src/engine.py ("WKS": WksParser())
+- Parser Logic:        src/formats/wks.py (class WksParser(BaseParser))
+- Domain Models:       src/models.py (FileRecoveryResult, RecoveredRecord)
+- Serialization:       src/reporter.py (Reporter.write_file_result)
+- Unit Tests:          tests/test_wks.py (TestWksParser)
+- Robustness Tests:    tests/test_robustness.py (parsers["WKS"])
+
+Execution Trace:
+  File on Disk -> engine.process_file()
+               -> detector.detect() -> FormatMatch("WKS")
+               -> WksParser.parse(filename, reader)
+               -> BOF validation (opcode 0x0000, ver 0x0404)
+               -> Sequential record loop (opcode, payload_len, payload_bytes)
+               -> Cell/record decoder (BLANK, INTEGER, NUMBER, LABEL, FORMULA)
+               -> EOF validation (opcode 0x0001)
+               -> FileRecoveryResult
+               -> reporter.write_file_result() -> JSON
+
+
+==============================================================================
+4. DEPENDENCIES ON THE REST OF THE PROJECT
+==============================================================================
+Understanding the blast radius is essential so that WKS enhancements do not
+break other formats:
+
+Component Risk Breakdown:
+1. src/formats/wks.py:
+   - Status: SAFE TO MODIFY / EXPAND.
+   - Localized strictly to Lotus 1-2-3 decoding.
+2. src/models.py:
+   - Status: SHARED / HIGH RISK.
+   - RecoveredRecord.to_dict() exports {"id", "status", "byte_range", "data"}.
+   - The top-level dictionary structure must NOT change because PAK, LIBRA-98,
+     LABLOG, and VAULT all share this contract.
+   - Safe approach: Enrich fields inside the record's "data" dictionary.
+3. src/reader.py:
+   - Status: UNTOUCHABLE.
+   - Shared bounds-checking foundation across all formats.
+4. src/reporter.py:
+   - Status: SHARED / LOW RISK.
+   - Already generic JSON serializer. No modification required.
+5. tests/test_robustness.py:
+   - Status: CRITICAL TEST INVARIANT.
+   - Runs deterministic fuzzing and truncation tests on WksParser.
+   - Any refactoring of WksParser must continue to pass 100% of these tests.
+
+
+==============================================================================
+5. ROOT CAUSE ANALYSIS OF WKS ISSUES
+==============================================================================
+
+Issue 1: Payload Truncation (P0 - CRITICAL)
+- Source: src/formats/wks.py line 265:
+    fields.update({
+        "record_type": f"UNKNOWN_OPCODE_0x{opcode:04X}",
+        "raw_hex": payload_bytes[:32].hex(),   <-- HARD-CODED 32-BYTE SLICE!
+    })
+- Cause: Development display truncation that leaked into the data pipeline.
+- Fix: Replace with 100% complete payload hex string.
+
+Issue 2: Formula Expression Discarded (P0 - CRITICAL)
+- Source: src/formats/wks.py lines 248-260:
+    Reads 1B format, 2B col, 2B row, 8B float cached value.
+    Completely discards bytes 13..payload_len (expression length & RPN tokens).
+- Cause: Formula tree marked as "inert data" for security without preserving bytecode.
+- Fix: Separate into:
+    - cached_value: 8B double float
+    - formula_raw_hex: complete raw bytecode hex
+    - formula_tokens: parsed list of RPN tokens
+    - formula: human-readable expression string (e.g., "+B4*1.05")
+
+Issue 3: Opcode 0x000B Unresolved (P1 - HIGH)
+- Reality: Official Lotus 1-2-3 specification (WSFF1.TXT) defines opcode 0x000B
+  as NRANGE (Named Range).
+- Wire Layout (24 bytes):
+    Offset 0x00..0x10: Range Name (16 bytes, ASCII null/space-padded)
+    Offset 0x10..0x12: Start Column (uint16)
+    Offset 0x12..0x14: Start Row (uint16)
+    Offset 0x14..0x16: End Column (uint16)
+    Offset 0x16..0x18: End Row (uint16)
+- Significance: In Lotus 1-2-3, macros are invoked by executing named ranges
+  (e.g., \A, ADD, A-SORT, D-LOOP in COUPONS.WKS). Decoding 0x000B extracts the
+  entire macro entry point table!
+
+Issue 4: Opcode 0x0008 Unresolved (P1 - HIGH)
+- Reality: Official Lotus 1-2-3 specification defines opcode 0x0008 as COLW
+  (Column Width).
+- Wire Layout (3 bytes):
+    Offset 0x00..0x01: Column index (uint16)
+    Offset 0x02:       Column width in character spaces (uint8, default 9)
+- Matches data observed in COUPONS.WKS and public_sample.wks (e.g., 000009 -> Col 0, Width 9).
+
+
+==============================================================================
+6. TARGET JSON SCHEMA (100% BACKWARD COMPATIBLE)
+==============================================================================
+
+Envelope:
+{
+  "file": "sample.wks",
+  "format": "WKS",
+  "file_size": 664,
+  "is_valid_header": true,
+  "total_records_recovered": 43,
+  "total_declared_records": 43,
+  "records": [ ... ],
+  "damages": [ ... ],
+  "metadata": { ... }
+}
+
+Record - Formula:
+{
+  "id": 14,
+  "status": "complete",
+  "byte_range": [140, 168],
+  "data": {
+    "opcode": 16,
+    "payload_len": 24,
+    "raw_payload": "7f020004000000000000c05940090001010003000000000000f03f0903",
+    "raw_hex": "7f020004000000000000c05940090001010003000000000000f03f0903",
+    "record_type": "FORMULA",
+    "col": 2,
+    "row": 4,
+    "format_byte": 127,
+    "cached_value": 103.0,
+    "formula_raw_hex": "090001010003000000000000f03f0903",
+    "formula_tokens": [
+      {"type": "VARIABLE", "col": 1, "row": 3, "address": "B4"},
+      {"type": "CONSTANT", "value": 1.0},
+      {"type": "OPERATOR", "symbol": "*"},
+      {"type": "RETURN"}
+    ],
+    "formula": "+B4*1.0"
+  }
+}
+
+Record - Named Range / Macro (0x000B):
+{
+  "id": 42,
+  "status": "complete",
+  "byte_range": [820, 848],
+  "data": {
+    "opcode": 11,
+    "payload_len": 24,
+    "raw_payload": "412d414d5400000000000000000000000200050002000500",
+    "raw_hex": "412d414d5400000000000000000000000200050002000500",
+    "record_type": "NAMED_RANGE",
+    "range_name": "A-AMT",
+    "start_col": 2,
+    "start_row": 5,
+    "end_col": 2,
+    "end_row": 5,
+    "range_address": "C6..C6",
+    "is_macro": true
+  }
+}
+
+Record - Column Width (0x0008):
+{
+  "id": 5,
+  "status": "complete",
+  "byte_range": [77, 84],
+  "data": {
+    "opcode": 8,
+    "payload_len": 3,
+    "raw_payload": "020008",
+    "raw_hex": "020008",
+    "record_type": "COLUMN_WIDTH",
+    "col": 2,
+    "width": 8
+  }
+}
+
+Record - Unknown / Unhandled Opcode (e.g. 0x002D, 437 bytes):
+{
+  "id": 137,
+  "status": "complete",
+  "byte_range": [4120, 4561],
+  "data": {
+    "opcode": 45,
+    "payload_len": 437,
+    "raw_payload": "<FULL 874 HEX CHARACTERS OF 437 BYTES>",
+    "raw_hex": "<FULL 874 HEX CHARACTERS OF 437 BYTES>",
+    "record_type": "UNKNOWN_OPCODE_0x002D",
+    "decode_status": "raw_preserved",
+    "decoded": null
+  }
+}
+
+
+==============================================================================
+7. ROUND-TRIP RECONSTRUCTION & VALIDATION STRATEGY
+==============================================================================
+To mathematically guarantee that the conversion is lossless, implement:
+  src/reconstructor.py (WksReconstructor)
+
+Verification Flow:
+  Original .WKS
+       |
+       v  WksParser.parse()
+  Lossless JSON
+       |
+       v  WksReconstructor.reconstruct()
+  Reconstructed .WKS Bytes
+       |
+       v  Binary Comparison
+  sha256(Original) == sha256(Reconstructed)
+
+Reconstruction Invariants:
+  1. For every record in JSON:
+     Header = struct.pack("<HH", opcode, len(payload_bytes))
+     Payload = bytes.fromhex(record["data"]["raw_payload"])
+  2. Sequential concatenation must produce an exact byte-for-byte replica.
+
+
+==============================================================================
+8. STEP-BY-STEP IMPLEMENTATION ROADMAP
+==============================================================================
+
+Phase 1: Zero-Loss Raw Payload Invariant (P0)
+- Target: src/formats/wks.py
+- Action: Remove [:32] slice. Store 100% payload in raw_payload and raw_hex.
+- Risk: LOW.
+
+Phase 2: First-Class Decoders for 0x0008 & 0x000B (P1)
+- Target: src/formats/wks.py
+- Action: Decode COLUMN_WIDTH (<HB) and NAMED_RANGE (<16sHHHH).
+- Risk: LOW.
+
+Phase 3: Modular Formula Tokenizer (P0)
+- Target: New file src/formats/wks_formula.py + hook in src/formats/wks.py
+- Action: Disassemble Lotus RPN bytecode into tokens and formula string.
+- Invariant: If token disassembly fails, fallback gracefully to raw bytecode
+  preservation without raising exceptions.
+- Risk: LOW.
+
+Phase 4: Round-Trip Reconstructor Tooling
+- Target: New file src/reconstructor.py + tests/test_wks_roundtrip.py
+- Action: Implement binary synthesis from JSON and assert SHA-256 equivalence.
+- Risk: NONE (read-only verification tool).
+
+Phase 5: Full Regression Testing
+- Target: Full test discovery across tests/
+- Assert all 64 existing unit/fuzz/robustness tests pass without regression.
+- Execute demo/run_demo.bat to verify end-to-end operational pipeline.
+==============================================================================

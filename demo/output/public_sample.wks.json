@@ -1,0 +1,736 @@
+{
+  "file": "public_sample.wks",
+  "format": "WKS",
+  "file_size": 664,
+  "is_valid_header": true,
+  "total_records_recovered": 43,
+  "total_declared_records": 43,
+  "records": [
+    {
+      "id": 0,
+      "status": "complete",
+      "byte_range": [
+        6,
+        32
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 22,
+        "record_type": "LABEL",
+        "col": 0,
+        "row": 0,
+        "align_prefix": "'",
+        "text": "This is a Label",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 1,
+      "status": "complete",
+      "byte_range": [
+        32,
+        39
+      ],
+      "data": {
+        "opcode": 8,
+        "payload_len": 3,
+        "record_type": "UNKNOWN_OPCODE_0x0008",
+        "raw_hex": "000010"
+      }
+    },
+    {
+      "id": 2,
+      "status": "complete",
+      "byte_range": [
+        39,
+        59
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 16,
+        "record_type": "LABEL",
+        "col": 1,
+        "row": 0,
+        "align_prefix": "'",
+        "text": "So's This",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 3,
+      "status": "complete",
+      "byte_range": [
+        59,
+        66
+      ],
+      "data": {
+        "opcode": 8,
+        "payload_len": 3,
+        "record_type": "UNKNOWN_OPCODE_0x0008",
+        "raw_hex": "01000c"
+      }
+    },
+    {
+      "id": 4,
+      "status": "complete",
+      "byte_range": [
+        66,
+        77
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 2,
+        "row": 0,
+        "value": 12345,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 5,
+      "status": "complete",
+      "byte_range": [
+        77,
+        84
+      ],
+      "data": {
+        "opcode": 8,
+        "payload_len": 3,
+        "record_type": "UNKNOWN_OPCODE_0x0008",
+        "raw_hex": "020007"
+      }
+    },
+    {
+      "id": 6,
+      "status": "complete",
+      "byte_range": [
+        84,
+        101
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 3,
+        "row": 0,
+        "value": 57.23,
+        "format_byte": 34
+      }
+    },
+    {
+      "id": 7,
+      "status": "complete",
+      "byte_range": [
+        101,
+        108
+      ],
+      "data": {
+        "opcode": 8,
+        "payload_len": 3,
+        "record_type": "UNKNOWN_OPCODE_0x0008",
+        "raw_hex": "030009"
+      }
+    },
+    {
+      "id": 8,
+      "status": "complete",
+      "byte_range": [
+        108,
+        125
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 4,
+        "row": 0,
+        "value": 12.3456789,
+        "format_byte": 5
+      }
+    },
+    {
+      "id": 9,
+      "status": "complete",
+      "byte_range": [
+        125,
+        132
+      ],
+      "data": {
+        "opcode": 8,
+        "payload_len": 3,
+        "record_type": "UNKNOWN_OPCODE_0x0008",
+        "raw_hex": "040009"
+      }
+    },
+    {
+      "id": 10,
+      "status": "complete",
+      "byte_range": [
+        132,
+        143
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 6,
+        "row": 0,
+        "value": 99,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 11,
+      "status": "complete",
+      "byte_range": [
+        143,
+        150
+      ],
+      "data": {
+        "opcode": 8,
+        "payload_len": 3,
+        "record_type": "UNKNOWN_OPCODE_0x0008",
+        "raw_hex": "060009"
+      }
+    },
+    {
+      "id": 12,
+      "status": "complete",
+      "byte_range": [
+        150,
+        176
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 22,
+        "record_type": "LABEL",
+        "col": 0,
+        "row": 1,
+        "align_prefix": "'",
+        "text": "This is a Label",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 13,
+      "status": "complete",
+      "byte_range": [
+        176,
+        196
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 16,
+        "record_type": "LABEL",
+        "col": 1,
+        "row": 1,
+        "align_prefix": "'",
+        "text": "So's This",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 14,
+      "status": "complete",
+      "byte_range": [
+        196,
+        207
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 2,
+        "row": 1,
+        "value": 12345,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 15,
+      "status": "complete",
+      "byte_range": [
+        207,
+        224
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 3,
+        "row": 1,
+        "value": 57.23,
+        "format_byte": 34
+      }
+    },
+    {
+      "id": 16,
+      "status": "complete",
+      "byte_range": [
+        224,
+        241
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 4,
+        "row": 1,
+        "value": 12.3456789,
+        "format_byte": 5
+      }
+    },
+    {
+      "id": 17,
+      "status": "complete",
+      "byte_range": [
+        241,
+        252
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 6,
+        "row": 1,
+        "value": 99,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 18,
+      "status": "complete",
+      "byte_range": [
+        252,
+        278
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 22,
+        "record_type": "LABEL",
+        "col": 0,
+        "row": 2,
+        "align_prefix": "'",
+        "text": "This is a Label",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 19,
+      "status": "complete",
+      "byte_range": [
+        278,
+        298
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 16,
+        "record_type": "LABEL",
+        "col": 1,
+        "row": 2,
+        "align_prefix": "'",
+        "text": "So's This",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 20,
+      "status": "complete",
+      "byte_range": [
+        298,
+        309
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 2,
+        "row": 2,
+        "value": 12345,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 21,
+      "status": "complete",
+      "byte_range": [
+        309,
+        326
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 3,
+        "row": 2,
+        "value": 57.23,
+        "format_byte": 34
+      }
+    },
+    {
+      "id": 22,
+      "status": "complete",
+      "byte_range": [
+        326,
+        343
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 4,
+        "row": 2,
+        "value": 12.3456789,
+        "format_byte": 5
+      }
+    },
+    {
+      "id": 23,
+      "status": "complete",
+      "byte_range": [
+        343,
+        354
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 6,
+        "row": 2,
+        "value": 99,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 24,
+      "status": "complete",
+      "byte_range": [
+        354,
+        380
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 22,
+        "record_type": "LABEL",
+        "col": 0,
+        "row": 3,
+        "align_prefix": "'",
+        "text": "This is a Label",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 25,
+      "status": "complete",
+      "byte_range": [
+        380,
+        400
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 16,
+        "record_type": "LABEL",
+        "col": 1,
+        "row": 3,
+        "align_prefix": "'",
+        "text": "So's This",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 26,
+      "status": "complete",
+      "byte_range": [
+        400,
+        411
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 2,
+        "row": 3,
+        "value": 12345,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 27,
+      "status": "complete",
+      "byte_range": [
+        411,
+        428
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 3,
+        "row": 3,
+        "value": 57.23,
+        "format_byte": 34
+      }
+    },
+    {
+      "id": 28,
+      "status": "complete",
+      "byte_range": [
+        428,
+        445
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 4,
+        "row": 3,
+        "value": 12.3456789,
+        "format_byte": 5
+      }
+    },
+    {
+      "id": 29,
+      "status": "complete",
+      "byte_range": [
+        445,
+        456
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 6,
+        "row": 3,
+        "value": 99,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 30,
+      "status": "complete",
+      "byte_range": [
+        456,
+        482
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 22,
+        "record_type": "LABEL",
+        "col": 0,
+        "row": 4,
+        "align_prefix": "'",
+        "text": "This is a Label",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 31,
+      "status": "complete",
+      "byte_range": [
+        482,
+        502
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 16,
+        "record_type": "LABEL",
+        "col": 1,
+        "row": 4,
+        "align_prefix": "'",
+        "text": "So's This",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 32,
+      "status": "complete",
+      "byte_range": [
+        502,
+        513
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 2,
+        "row": 4,
+        "value": 12345,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 33,
+      "status": "complete",
+      "byte_range": [
+        513,
+        530
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 3,
+        "row": 4,
+        "value": 57.23,
+        "format_byte": 34
+      }
+    },
+    {
+      "id": 34,
+      "status": "complete",
+      "byte_range": [
+        530,
+        547
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 4,
+        "row": 4,
+        "value": 12.3456789,
+        "format_byte": 5
+      }
+    },
+    {
+      "id": 35,
+      "status": "complete",
+      "byte_range": [
+        547,
+        558
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 6,
+        "row": 4,
+        "value": 99,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 36,
+      "status": "complete",
+      "byte_range": [
+        558,
+        584
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 22,
+        "record_type": "LABEL",
+        "col": 0,
+        "row": 5,
+        "align_prefix": "'",
+        "text": "This is a Label",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 37,
+      "status": "complete",
+      "byte_range": [
+        584,
+        604
+      ],
+      "data": {
+        "opcode": 15,
+        "payload_len": 16,
+        "record_type": "LABEL",
+        "col": 1,
+        "row": 5,
+        "align_prefix": "'",
+        "text": "So's This",
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 38,
+      "status": "complete",
+      "byte_range": [
+        604,
+        615
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 2,
+        "row": 5,
+        "value": 12345,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 39,
+      "status": "complete",
+      "byte_range": [
+        615,
+        632
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 3,
+        "row": 5,
+        "value": 57.23,
+        "format_byte": 34
+      }
+    },
+    {
+      "id": 40,
+      "status": "complete",
+      "byte_range": [
+        632,
+        649
+      ],
+      "data": {
+        "opcode": 14,
+        "payload_len": 13,
+        "record_type": "NUMBER",
+        "col": 4,
+        "row": 5,
+        "value": 12.3456789,
+        "format_byte": 5
+      }
+    },
+    {
+      "id": 41,
+      "status": "complete",
+      "byte_range": [
+        649,
+        660
+      ],
+      "data": {
+        "opcode": 13,
+        "payload_len": 7,
+        "record_type": "INTEGER",
+        "col": 6,
+        "row": 5,
+        "value": 99,
+        "format_byte": 127
+      }
+    },
+    {
+      "id": 42,
+      "status": "complete",
+      "byte_range": [
+        660,
+        664
+      ],
+      "data": {
+        "record_type": "EOF",
+        "opcode": 1
+      }
+    }
+  ],
+  "damages": [],
+  "metadata": {
+    "saw_bof": true,
+    "saw_eof": true,
+    "version_code": "0x0404"
+  }
+}
